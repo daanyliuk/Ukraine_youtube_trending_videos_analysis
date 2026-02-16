@@ -8,15 +8,29 @@
 
 
 
--- #1 Аналіз структури категорій відео українських трендів( кількість відео, середня кількість переглядів, коефіцієнт залученості)
-select
-    video_category_id
-    , count(*) as num_of_videos
-    , round(avg(video_view_count),0) as avg_views
-    , round(avg((video_like_count + video_comment_count) * 1.0 / nullif(video_view_count,0)), 2) as avg_engagement_rate
+-- #1 Аналіз структури категорій відео українських трендів( кількість відео, середня кількість переглядів, медіанна кількість переглядів, коефіцієнт залученості)
+with ranked_videos as(
+	select 
+		video_category_id
+		, video_view_count
+		, video_like_count
+		, video_comment_count
+		, row_number() over(partition by video_category_id order by video_view_count) as rn
+		, count(*) over(partition by video_category_id) as total_count
 from youtube_trending_videos_global
 where video_trending_country = 'Ukraine'
 	and video_category_id is not null
+					)
+					
+select 
+	video_category_id as video_category_name
+	, count(*) as num_of_videos
+	, round(avg(video_view_count),0) as avg_views
+	, avg(case 
+			when rn between total_count/2.0 and total_count/ 2.0 + 1 then video_view_count 
+	end) as median_views
+	, round(avg((video_like_count + video_comment_count) * 1.0 / nullif(video_view_count,0)), 4) as avg_engagement_rate
+from ranked_videos
 group by video_category_id
 order by num_of_videos desc
 ;
