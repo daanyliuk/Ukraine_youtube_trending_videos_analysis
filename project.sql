@@ -8,17 +8,17 @@
 
 
 
--- #1 Top categories by the number of trending videos & their average views, likes, and comments.
-select 
-	video_category_id 
-	, count(video_id) as trending_videos
-	, round(avg(video_view_count),0) as avg_view
-	, round(avg(video_like_count),0) as avg_likes
-	, round(avg(video_comment_count),0) as avg_comments
-from youtube_trending_videos_global ytvg 
-where video_category_id is not null
+-- #1 Аналіз структури категорій відео українських трендів( кількість відео, середня кількість переглядів, коефіцієнт залученості)
+select
+    video_category_id
+    , count(*) as num_of_videos
+    , round(avg(video_view_count),0) as avg_views
+    , round(avg((video_like_count + video_comment_count) * 1.0 / nullif(video_view_count,0)), 2) as avg_engagement_rate
+from youtube_trending_videos_global
+where video_trending_country = 'Ukraine'
+	and video_category_id is not null
 group by video_category_id
-order by trending_videos desc
+order by num_of_videos desc
 ;
 
 -- #1.1 Correlation between views and likes.
