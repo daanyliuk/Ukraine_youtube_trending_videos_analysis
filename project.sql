@@ -36,7 +36,7 @@ order by num_of_videos desc
 ;
 
 
--- #2 Performance by Duration, AVG Views, Likes, and Comments per category.
+-- #2 Створюємо buckets і по них знаходимо к-сть відео, серендю к-сть переглядів, медіанну к-сть переглядів, середню к-сть лайків та коментарів.
 with buckets as(
 			select 
 				*
@@ -77,79 +77,60 @@ group by time_category
 order by num_of_videos desc
 ;
 
--- #3 Minimum subscribers, views, and videos to get trending status
-		select 
-			channel_country
-			, min(channel_video_count) min_video_count
-			, min(channel_subscriber_count) min_subscriber_count
-			, min(channel_view_count) min_view_count
-		from youtube_project.youtube_trending_videos_global_copy ytvgc 
-		where channel_country !=''
-		group by channel_country 
-	 	having min(channel_view_count) != 0
-		order by min_view_count
-;
 
--- #4. The breakdown of YouTube video activity across different categories and days of the week
-with cte1 as(
-		select *
-			, case 
-			strftime('%w',video_published_at)
-			when '0' then 'Sunday'
-			when '1' then 'Monday'
-			when '2' then 'Tuesday'
-			when '3' then 'Wednesday'
-			when '4' then 'Thursday'
-			when '5' then 'Friday'
-			when '6' then 'Saturday'
-			end as day_name
-		from youtube_trending_videos_global ytvg
-		where video_category_id is not null
-)
+
+
+-- #3 По кожному дню знаходимо час публікації, к-сть відео та середню к-сть переглядів
 
 select 
-	video_category_id
-	, day_name
-	, count(video_id) as videos_count
+	 case cast(strftime('%w',video_published_at) as integer)
+		when 1 then '1. Monday'
+		when 2 then '2. Tuesday'
+		when 3 then '3. Wednesday'
+		when 4 then '4. Thursday'
+		when 5 then '5. Friday'
+		when 6 then '5. Saturday'
+		else 'Sunday'
+	end as day_name
+	, strftime('%H:00:00', datetime(video_published_at, '+2 hours')) as kyiv_publish_hours
+	, count(*) as num_of_videos
 	, round(avg(video_view_count),0) as avg_views
-	, round(avg(video_like_count),0) as avg_likes
-	, round(avg(video_comment_count),0) as avg_comments
-from cte1 
-group by video_category_id, day_name
-order by video_category_id, avg_views desc
+from youtube_trending_videos_global ytvg 
+where video_trending_country = 'Ukraine'
+	and video_category_id is not null
+group by day_name, kyiv_publish_hours
+order by day_name, num_of_videos desc
+
 ;
 
--- #4.1 AVG time(in days) to get trending status
-with cte1 as(
-			select * 
-				, round(julianday(video_trending__date) - julianday(video_published_at),0) day_diff
-			from youtube_trending_videos_global ytvg 
-)
+
+
+
+-- #4. Ділимо відео на 2 категорії :
+-- 1) Shorts ( до 1 хв )
+-- 2) Long ( все інше )
+-- Далі рахуємо кількість днів до набуття статусу трендового.
 
 select 
-	video_category_id
-	, round(avg(day_diff),0) as avg_day_time_to_trend
-from cte1
-group by video_category_id
-having video_category_id is not null
-order by avg_day_time_to_trend 
+    case 
+        when video_duration_sec < 60 then 'Shorts'
+        else 'Long-form'
+    end as video_type
+    , (julianday(video_trending__date) - julianday(date(video_published_at))) as days_to_trending
+    , video_view_count
+    , video_category_id
+from youtube_trending_videos_global
+where video_trending_country = 'Ukraine'
+    and video_category_id is not null
 ;
+    
 
--- #5. Trends in video engagement metrics across different countries.
-select 
-    channel_country
-    , COUNT(*) as trending_video_count
-    , ROUND(AVG(video_view_count), 0) as avg_view_count
-    , ROUND(AVG(channel_subscriber_count), 0) as avg_channel_subsc_count
-    , ROUND(AVG(video_like_count), 0) as avg_like_count
-    , ROUND(AVG(video_like_count * 1.0 / NULLIF(video_view_count, 0)), 2) as avg_like_view_ratio
-from youtube_trending_videos_global ytvg
-where channel_country IS NOT NULL
-group by channel_country
-having trending_video_count > 100
-	and channel_country != ''
-order by avg_like_view_ratio desc, trending_video_count desc
-limit 20
-; 
+
+
+
+
+
+
+
 
 
