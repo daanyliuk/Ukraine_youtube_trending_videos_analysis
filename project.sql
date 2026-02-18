@@ -1,6 +1,6 @@
 -- SQL Dialect: SQLite
 -- Стиль і синтаксис
--- Використовуються ключові слова ROUND, AVG, COUNT, CASE WHEN, WITH (CTE), GROUP BY, ORDER BY, HAVING.
+-- Використовуються ключові слова ROUND, AVG, COUNT, CASE WHEN, WITH (CTE), GROUP BY, ORDER BY, HAVING, row_number.
 
 
 
@@ -125,9 +125,38 @@ where video_trending_country = 'Ukraine'
 ;
     
 
+-- #5. Формуємо перший запит. Для кожного каналу знаходимо максимальну кількість підписників, рівень залученості та середню к-сть переглядів.
+-- Далі через case формуємо 3 групи ( Large, medium, small ) і для них рахуємо к-сть каналів, середню к-сть перегялдів та середній рівень залученості.
+-- В даному кейсі ми нівелюємо вплив каналів з великою к-стю відео на загальний ER за допомогою розрахунку спочатку ER для кожного каналу, а тільки потім вже середній по групах.
 
 
 
+with channel_stats as (
+    select
+        channel_id
+        , max(channel_subscriber_count) as subscriber_count -- для більш точного рохрахунку беремо максимальну кількість підписників через те, що зазвичай підписники ростуть з часом.
+        , round(sum(video_like_count + video_comment_count) * 1.0 / nullif(sum(video_view_count),0),4) as channel_eng_rate
+        , round(avg(video_view_count),0) as channel_avg_views
+    from youtube_trending_videos_global
+    where video_trending_country = 'Ukraine'
+      and video_category_id is not null
+      and channel_subscriber_count is not null
+    group by channel_id
+)
+
+select 
+    case 
+        when subscriber_count < 100000 then '1. Small'
+        when subscriber_count >= 100000 and subscriber_count < 1000000 then '2. Medium'
+        else '3. Large'
+    end as channel_size
+    , count(*) as number_of_channels
+    , round(avg(channel_avg_views),0) as avg_views
+    , round(avg(channel_eng_rate),4) as avg_eng_rate
+from channel_stats
+group by channel_size
+order by channel_size
+;
 
 
 
